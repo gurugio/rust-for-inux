@@ -163,4 +163,11 @@ config SAMPLE_RUST_SELFTESTS
 
 	  If unsure, say N.
 
+config SAMPLE_RUST_LDD_CH02
+	tristate "Linux Device Driver CH02 in Rust"
+	help
+	  This option builds the Linux Device Driver examples in Rust.
+
+	  If unsure, say N.
+
 endif # SAMPLES_RUST

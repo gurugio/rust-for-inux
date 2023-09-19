@@ -5,8 +5,8 @@
 //! C header: [`include/linux/sched.h`](../../../../include/linux/sched.h).
 
 use crate::{
-    bindings, c_str, error::from_kernel_err_ptr, types::ForeignOwnable, ARef, AlwaysRefCounted,
-    Result, ScopeGuard,
+    bindings, c_str, error::from_kernel_err_ptr, str::CStr, types::ForeignOwnable, ARef,
+    AlwaysRefCounted, Result, ScopeGuard,
 };
 use alloc::boxed::Box;
 use core::{cell::UnsafeCell, fmt, marker::PhantomData, ops::Deref, ptr};
@@ -195,6 +195,15 @@ impl Task {
         // And `wake_up_process` is safe to be called for any valid task, even if the task is
         // running.
         unsafe { bindings::wake_up_process(self.0.get()) };
+    }
+
+    /// Returns the comm filed of the given task
+    pub fn comm(&self) -> &CStr {
+        unsafe {
+            let ptr: &[i8; 16] = &(*self.0.get()).comm;
+            let ptr = &*(ptr as *const [i8] as *const [u8]);
+            CStr::from_bytes_with_nul_unchecked(&*ptr::addr_of!(ptr[0..ptr.len()]))
+        }
     }
 }
 
