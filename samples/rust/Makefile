@@ -16,5 +16,6 @@ obj-$(CONFIG_SAMPLE_RUST_ECHO_SERVER)		+= rust_echo_server.o
 obj-$(CONFIG_SAMPLE_RUST_FS)			+= rust_fs.o
 obj-$(CONFIG_SAMPLE_RUST_SELFTESTS)		+= rust_selftests.o
 obj-$(CONFIG_SAMPLE_RUST_LDD_CH02)		+= rust_hello.o
+obj-$(CONFIG_SAMPLE_RUST_LDD_SCULL)		+= rust_scull.o
 
 subdir-$(CONFIG_SAMPLE_RUST_HOSTPROGS)		+= hostprogs
