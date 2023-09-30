@@ -11,8 +11,8 @@ use kernel::{
     file::{self, File},
     io_buffer::{IoBufferReader, IoBufferWriter},
     miscdev,
+    str::CString,
     sync::{Arc, ArcBorrow, Mutex, UniqueArc},
-    PAGE_SIZE,
 };
 
 module! {
@@ -24,35 +24,24 @@ module! {
 }
 
 const SCULL_NR_DEVS: usize = 3;
-static _SCULL_BLOCK_SIZE: usize = PAGE_SIZE;
-
-struct ScullDevInner {
-    counter: usize,
-    offset: usize,
-    data: Vec<u8>,
-}
 
 // internal info between file operations
 struct ScullDev {
+    name: CString,
     minor: usize,
-    inner: Mutex<ScullDevInner>,
+    contents: Mutex<Vec<u8>>,
 }
 
 impl ScullDev {
-    fn try_new(num: usize) -> Result<Arc<Self>> {
+    fn try_new(name: CString, num: usize) -> Result<Arc<Self>> {
         let mut dev = Pin::from(UniqueArc::try_new(Self {
+            name,
             minor: num,
-            inner: unsafe {
-                Mutex::new(ScullDevInner {
-                    counter: 0,
-                    offset: 0,
-                    data: Vec::new(),
-                })
-            },
+            contents: unsafe { Mutex::new(Vec::new()) },
         })?);
 
-        let pinned = unsafe { dev.as_mut().map_unchecked_mut(|s| &mut s.inner) };
-        kernel::mutex_init!(pinned, "ScullDev::inner");
+        let pinned = unsafe { dev.as_mut().map_unchecked_mut(|s| &mut s.contents) };
+        kernel::mutex_init!(pinned, "ScullDev::contents");
 
         Ok(dev.into())
     }
@@ -67,30 +56,61 @@ impl file::Operations for RustFile {
     type OpenData = Arc<ScullDev>;
 
     fn open(shared: &Arc<ScullDev>, _file: &file::File) -> Result<Self::Data> {
-        pr_info!("open is invoked\n");
-        pr_info!("minor: {}\n", shared.minor);
+        pr_info!(
+            "open is invoked: name={} minor={}\n",
+            &*shared.name,
+            shared.minor
+        );
         Ok(shared.clone())
     }
 
     //
     fn read(
-        _shared: ArcBorrow<'_, ScullDev>,
+        shared: ArcBorrow<'_, ScullDev>,
         _: &File,
-        _data: &mut impl IoBufferWriter,
-        _offset: u64,
+        data: &mut impl IoBufferWriter,
+        offset: u64,
     ) -> Result<usize> {
-        pr_info!("read is invoked\n");
-        Ok(0)
+        pr_info!("[{}] read is invoked\n", &*shared.name);
+        let offset = offset as usize;
+
+        let buffer = shared.contents.lock();
+        if offset >= buffer.len() {
+            return Ok(0);
+        }
+
+        let mut len = buffer.len();
+        pr_info!("buffer.len() = {}\n", len);
+        if offset + len > buffer.len() {
+            len = buffer.len() - offset;
+        }
+        data.write_slice(&buffer[offset..offset + len])?;
+
+        pr_info!("read: {} bytes\n", len);
+        Ok(len)
     }
 
     fn write(
-        _shared: ArcBorrow<'_, ScullDev>,
+        shared: ArcBorrow<'_, ScullDev>,
         _: &File,
-        _data: &mut impl IoBufferReader,
-        _offset: u64,
+        data: &mut impl IoBufferReader,
+        offset: u64,
     ) -> Result<usize> {
-        pr_debug!("write is invoked\n");
-        Ok(0)
+        pr_debug!("[{}] write is invoked\n", &*shared.name);
+
+        //let offset: usize = offset.try_into().map_err(|_| Error::EINVAL)?;
+        let offset = offset as usize;
+        let len: usize = data.len();
+        let new_len = len + offset;
+
+        let mut buffer = shared.contents.lock();
+        if new_len > buffer.len() {
+            buffer.try_resize(new_len, 0)?;
+        }
+        data.read_slice(&mut buffer[offset..new_len])?;
+
+        pr_info!("write: {} bytes\n", len);
+        Ok(len)
     }
 
     fn release(_data: Self::Data, _file: &File) {
@@ -111,7 +131,7 @@ impl kernel::Module for RustScull {
         // because its type is `chrdev::Registration<2>`
         let mut devs = Vec::try_with_capacity(SCULL_NR_DEVS)?;
         for i in 0..SCULL_NR_DEVS {
-            let dev = ScullDev::try_new(i)?;
+            let dev = ScullDev::try_new(CString::try_from_fmt(fmt!("rust_scull{}", i))?, i)?;
             let reg = miscdev::Registration::new_pinned(fmt!("rust_scull{}", i), dev)?;
             devs.try_push(reg)?;
         }
