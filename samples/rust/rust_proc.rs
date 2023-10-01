@@ -7,6 +7,7 @@
 //! make LLVM=1 M=samples/rust
 
 // core is from Rust compiler, not from kernel
+use core::marker::PhantomPinned;
 use core::ptr;
 
 use kernel::bindings;
@@ -26,8 +27,10 @@ module! {
 }
 
 struct RustProc {
+    ops: bindings::proc_ops,
     parent: *mut bindings::proc_dir_entry,
     _entry: *mut bindings::proc_dir_entry,
+    _pin: PhantomPinned,
 }
 
 impl RustProc {
@@ -55,9 +58,13 @@ impl RustProc {
         pr_info!("proc_open is invoked\n");
         pr_info!("proc_open is invoked\n");
         pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
+        pr_err!("proc_open is invoked\n");
+        pr_err!("proc_open is invoked\n");
+        pr_err!("proc_open is invoked\n");
+
+        while true {
+            pr_info!("proc_open is invoked\n");
+        }
 
         unsafe {
             let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
@@ -79,22 +86,28 @@ impl kernel::Module for RustProc {
             let dir_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME))?;
             let parent = bindings::proc_mkdir(dir_name.as_char_ptr(), ptr::null_mut());
 
-            let proc_ops = bindings::proc_ops {
-                proc_flags: 0,                // mandatory to prevent build error
-                proc_get_unmapped_area: None, // mandatory to prevent build error
-                proc_read_iter: None,         // mandatory to prevent build error
-                proc_open: Some(Self::proc_open),
-                proc_read: None,
-                proc_write: None,
-                proc_lseek: None,
-                proc_release: None,
-                proc_poll: None,
-                proc_ioctl: None,
-                proc_mmap: None,
+            let ret = Self {
+                parent,
+                ops: bindings::proc_ops {
+                    proc_flags: 0,                // mandatory to prevent build error
+                    proc_get_unmapped_area: None, // mandatory to prevent build error
+                    proc_read_iter: None,         // mandatory to prevent build error
+                    proc_open: Some(Self::proc_open),
+                    proc_read: None,
+                    proc_write: None,
+                    proc_lseek: None,
+                    proc_release: None,
+                    proc_poll: None,
+                    proc_ioctl: None,
+                    proc_mmap: None,
+                },
+                _entry: ptr::null_mut(),
+                _pin: PhantomPinned,
             };
+
             let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?;
             let entry: *mut bindings::proc_dir_entry =
-                bindings::proc_create(entry_name.as_char_ptr(), 0o644, parent, &proc_ops);
+                bindings::proc_create(entry_name.as_char_ptr(), 0o644, parent, &ret.ops);
             // How to check entry?
             if entry.is_null() {
                 pr_info!("failed to create a proc entry\n");
@@ -102,10 +115,7 @@ impl kernel::Module for RustProc {
                 pr_info!("succeeded to create a proc entry: {:p}\n", entry);
             }
 
-            Ok(RustProc {
-                parent,
-                _entry: entry,
-            })
+            Ok(ret)
         }
     }
 }
