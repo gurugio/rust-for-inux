@@ -170,8 +170,15 @@ config SAMPLE_RUST_LDD_CH02
 
 	  If unsure, say N.
 
-config SAMPLE_RUST_LDD_SCULL
+config SAMPLE_RUST_LDD_CH03
 	tristate "Linux Device Driver Scull in Rust"
+	help
+	  This option builds the Linux Device Driver examples in Rust.
+
+	  If unsure, say N.
+
+config SAMPLE_RUST_LDD_CH04
+	tristate "Linux Device Driver proc in Rust"
 	help
 	  This option builds the Linux Device Driver examples in Rust.
 
