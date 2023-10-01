@@ -25,23 +25,49 @@ module! {
     license: "GPL",
 }
 
-struct RustProc {}
+struct RustProc {
+    parent: *mut bindings::proc_dir_entry,
+    _entry: *mut bindings::proc_dir_entry,
+}
 
 impl RustProc {
     unsafe extern "C" fn proc_open(
         _inode: *mut bindings::inode,
         _file: *mut bindings::file,
     ) -> i32 {
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+        pr_info!("proc_open is invoked\n");
+
+        unsafe {
+            let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
+        }
         0 as i32
     }
 
-    unsafe extern "C" fn proc_read(
-        _file: *mut bindings::file,
-        _buf: *mut core::ffi::c_char,
-        _len: usize,
-        _off: *mut bindings::loff_t,
-    ) -> isize {
-        0 as isize
+    unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::c_void) -> i32 {
+        pr_info!("proc_read is invoked\n");
+        0 as i32
     }
 }
 
@@ -58,7 +84,7 @@ impl kernel::Module for RustProc {
                 proc_get_unmapped_area: None, // mandatory to prevent build error
                 proc_read_iter: None,         // mandatory to prevent build error
                 proc_open: Some(Self::proc_open),
-                proc_read: Some(Self::proc_read),
+                proc_read: None,
                 proc_write: None,
                 proc_lseek: None,
                 proc_release: None,
@@ -66,21 +92,35 @@ impl kernel::Module for RustProc {
                 proc_ioctl: None,
                 proc_mmap: None,
             };
+            let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?;
+            let entry: *mut bindings::proc_dir_entry =
+                bindings::proc_create(entry_name.as_char_ptr(), 0o644, parent, &proc_ops);
+            // How to check entry?
+            if entry.is_null() {
+                pr_info!("failed to create a proc entry\n");
+            } else {
+                pr_info!("succeeded to create a proc entry: {:p}\n", entry);
+            }
 
-            bindings::proc_create(
-                CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?.as_char_ptr(),
-                0o644,
+            Ok(RustProc {
                 parent,
-                &proc_ops,
-            );
+                _entry: entry,
+            })
         }
-
-        Ok(RustProc {})
     }
 }
 
 impl Drop for RustProc {
     fn drop(&mut self) {
+        unsafe {
+            let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
+            bindings::remove_proc_entry(entry_name.as_char_ptr(), self.parent);
+
+            let dir_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME)).unwrap();
+            bindings::remove_proc_entry(dir_name.as_char_ptr(), ptr::null_mut());
+        }
         pr_info!("rust_proc is unloaded\n");
     }
 }
+
+unsafe impl Sync for RustProc {}

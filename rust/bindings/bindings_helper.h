@@ -37,6 +37,7 @@
 #include <linux/uaccess.h>
 #include <linux/uio.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 /* `bindgen` gets confused at certain things. */
 const gfp_t BINDINGS_GFP_KERNEL = GFP_KERNEL;
