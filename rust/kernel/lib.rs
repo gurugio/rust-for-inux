@@ -62,6 +62,7 @@ pub mod user_ptr;
 #[doc(hidden)]
 pub use bindings;
 pub use macros;
+pub use proc;
 pub use uapi;
 
 #[doc(hidden)]

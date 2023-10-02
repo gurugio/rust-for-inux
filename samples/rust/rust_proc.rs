@@ -7,16 +7,14 @@
 //! make LLVM=1 M=samples/rust
 
 // core is from Rust compiler, not from kernel
+use core::ffi;
 use core::marker::PhantomPinned;
 use core::ptr;
 
 use kernel::bindings;
 use kernel::prelude::*;
+use kernel::proc::{ProcOperations, RustProcRegistration};
 use kernel::str::CString;
-
-static SUB_DIR_NAME: &'static str = "rust_demo";
-static PROC_FS_NAME: &'static str = "rust_proc_fs";
-static _PROC_FS_NAME_MUL: &'static str = "rust_proc_fs_mul";
 
 module! {
     type: RustProc,
@@ -26,131 +24,64 @@ module! {
     license: "GPL",
 }
 
-struct RustProc {
-    ops: bindings::proc_ops,
-    parent: *mut bindings::proc_dir_entry,
-    _entry: *mut bindings::proc_dir_entry,
-    _pin: PhantomPinned,
+/*
+unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::c_void) -> i32 {
+    pr_info!("proc_read is invoked\n");
+    unsafe {
+        bindings::seq_printf(
+            _m,
+            CString::try_from_fmt(fmt!("Hello, world!\n"))
+                .unwrap()
+                .as_char_ptr(),
+        );
+    }
+    0 as i32
+}
+*/
+
+struct Token;
+
+#[vtable]
+impl ProcOperations for Token {
+    type OpenData = ();
+    type Data = ();
+
+    fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32> {
+        pr_info!("proc_open is invoked\n");
+        //unsafe {
+        //    let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
+        //    pr_info!("single_open: ret={}\n", ret);
+        //}
+
+        Ok(0)
+    }
+
+    fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {
+        pr_info!("proc_release is invoked\n");
+        //unsafe {
+        //    let ret = bindings::single_release(_inode, _file);
+        //    pr_info!("single_release: ret={}\n", ret);
+        //}
+    }
 }
 
-impl RustProc {
-    unsafe extern "C" fn proc_open(
-        _inode: *mut bindings::inode,
-        _file: *mut bindings::file,
-    ) -> i32 {
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_info!("proc_open is invoked\n");
-        pr_err!("proc_open is invoked\n");
-        pr_err!("proc_open is invoked\n");
-        pr_err!("proc_open is invoked\n");
-
-        unsafe {
-            let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
-        }
-        0 as i32
-    }
-
-    unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::c_void) -> i32 {
-        pr_info!("proc_read is invoked\n");
-        unsafe {
-            bindings::seq_printf(
-                _m,
-                CString::try_from_fmt(fmt!("Hello, world!\n"))
-                    .unwrap()
-                    .as_char_ptr(),
-            );
-        }
-        0 as i32
-    }
-
-    unsafe extern "C" fn proc_release(
-        _inode: *mut bindings::inode,
-        _file: *mut bindings::file,
-    ) -> i32 {
-        pr_info!("proc_release is invoked\n");
-        unsafe {
-            let ret = bindings::single_release(_inode, _file);
-        }
-        // single_release(_inode, _file);
-        0 as i32
-    }
+struct RustProc {
+    _reg: RustProcRegistration,
 }
 
 impl kernel::Module for RustProc {
     fn init(name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
         pr_info!("{} is loaded\n", name.to_str()?);
 
-        unsafe {
-            let dir_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME))?;
-            let parent = bindings::proc_mkdir(dir_name.as_char_ptr(), ptr::null_mut());
+        let reg = RustProcRegistration::new();
+        reg.register::<Token>(ptr::null_mut())?;
 
-            let ret = Self {
-                parent,
-                ops: bindings::proc_ops {
-                    proc_flags: 0,                // mandatory to prevent build error
-                    proc_get_unmapped_area: None, // mandatory to prevent build error
-                    proc_read_iter: None,         // mandatory to prevent build error
-                    proc_open: Some(Self::proc_open),
-                    proc_read: Some(bindings::seq_read),
-                    proc_write: None,
-                    proc_lseek: Some(bindings::seq_lseek),
-                    proc_release: Some(Self::proc_release),
-                    proc_poll: None,
-                    proc_ioctl: None,
-                    proc_mmap: None,
-                },
-                _entry: ptr::null_mut(),
-                _pin: PhantomPinned,
-            };
-
-            let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?;
-            let entry: *mut bindings::proc_dir_entry =
-                bindings::proc_create(entry_name.as_char_ptr(), 0o644, parent, &ret.ops);
-            // How to check entry?
-            if entry.is_null() {
-                pr_info!("failed to create a proc entry\n");
-            } else {
-                pr_info!(
-                    "succeeded to create a proc entry: {:p} proc_open={:#x}\n",
-                    entry,
-                    Self::proc_open as usize
-                );
-            }
-
-            Ok(ret)
-        }
+        Ok(Self { _reg: reg })
     }
 }
 
 impl Drop for RustProc {
     fn drop(&mut self) {
-        unsafe {
-            let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
-            bindings::remove_proc_entry(entry_name.as_char_ptr(), self.parent);
-
-            let dir_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME)).unwrap();
-            bindings::remove_proc_entry(dir_name.as_char_ptr(), ptr::null_mut());
-        }
         pr_info!("rust_proc is unloaded\n");
     }
 }
-
-unsafe impl Sync for RustProc {}
