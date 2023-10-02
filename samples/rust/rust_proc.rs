@@ -62,10 +62,6 @@ impl RustProc {
         pr_err!("proc_open is invoked\n");
         pr_err!("proc_open is invoked\n");
 
-        while true {
-            pr_info!("proc_open is invoked\n");
-        }
-
         unsafe {
             let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
         }
@@ -74,6 +70,26 @@ impl RustProc {
 
     unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::c_void) -> i32 {
         pr_info!("proc_read is invoked\n");
+        unsafe {
+            bindings::seq_printf(
+                _m,
+                CString::try_from_fmt(fmt!("Hello, world!\n"))
+                    .unwrap()
+                    .as_char_ptr(),
+            );
+        }
+        0 as i32
+    }
+
+    unsafe extern "C" fn proc_release(
+        _inode: *mut bindings::inode,
+        _file: *mut bindings::file,
+    ) -> i32 {
+        pr_info!("proc_release is invoked\n");
+        unsafe {
+            let ret = bindings::single_release(_inode, _file);
+        }
+        // single_release(_inode, _file);
         0 as i32
     }
 }
@@ -93,10 +109,10 @@ impl kernel::Module for RustProc {
                     proc_get_unmapped_area: None, // mandatory to prevent build error
                     proc_read_iter: None,         // mandatory to prevent build error
                     proc_open: Some(Self::proc_open),
-                    proc_read: None,
+                    proc_read: Some(bindings::seq_read),
                     proc_write: None,
-                    proc_lseek: None,
-                    proc_release: None,
+                    proc_lseek: Some(bindings::seq_lseek),
+                    proc_release: Some(Self::proc_release),
                     proc_poll: None,
                     proc_ioctl: None,
                     proc_mmap: None,
@@ -112,7 +128,11 @@ impl kernel::Module for RustProc {
             if entry.is_null() {
                 pr_info!("failed to create a proc entry\n");
             } else {
-                pr_info!("succeeded to create a proc entry: {:p}\n", entry);
+                pr_info!(
+                    "succeeded to create a proc entry: {:p} proc_open={:#x}\n",
+                    entry,
+                    Self::proc_open as usize
+                );
             }
 
             Ok(ret)
