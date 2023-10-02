@@ -65,6 +65,15 @@ impl ProcOperations for Token {
             pr_info!("single_release: ret={}\n", ret);
         }
     }
+
+    fn proc_read( _file: *mut bindings::file, _buf: *mut ffi::c_char, _size: usize, _ppos: *mut bindings::loff_t) -> Result<i32> {
+        pr_info!("proc_read is invoked\n");
+        unsafe {
+            let ret = bindings::seq_read(_file, _buf, _size, _ppos);
+            pr_info!("seq_read: ret={}\n", ret);
+        }
+        Ok(0)
+    }
 }
 
 struct RustProc {
