@@ -42,17 +42,32 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         }
     }
 
+    unsafe extern "C" fn proc_read(
+        _file: *mut bindings::file,
+        _buf: *mut core::ffi::c_char,
+        _size: usize,
+        _ppos: *mut bindings::loff_t,
+    ) -> isize {
+        from_kernel_result! {
+            pr_info!("OperationVtable::read is invoked\n");
+            let _ = unsafe {T::proc_read(_file, _buf, _size, _ppos)};
+            Ok(0)
+        }
+    }
+
     const VTABLE: bindings::proc_ops = bindings::proc_ops {
         proc_flags: 0,                // mandatory to prevent build error
         proc_get_unmapped_area: None, // mandatory to prevent build error
         proc_read_iter: None,         // mandatory to prevent build error
         proc_open: Some(Self::proc_open),
-        proc_read: None,
+        proc_read: Some(Self::proc_read),
         proc_write: None,
         proc_lseek: None,
         proc_release: Some(Self::proc_release),
         proc_poll: None,
         proc_ioctl: None,
+        #[cfg(CONFIG_COMPAT)]
+        proc_compat_ioctl: None,
         proc_mmap: None,
     };
 
@@ -70,6 +85,7 @@ pub trait ProcOperations {
     type OpenData: Sync = ();
     type Data: Send + Sync = ();
     fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32>;
+    fn proc_read(_file: *mut bindings::file, _buf: *mut core::ffi::c_char, _size: usize, _ppos: *mut bindings::loff_t) -> Result<i32>;
     fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {}
 }
 
