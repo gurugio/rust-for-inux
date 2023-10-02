@@ -24,8 +24,11 @@ module! {
     license: "GPL",
 }
 
-/*
-unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::c_void) -> i32 {
+#[no_mangle]
+pub unsafe extern "C" fn proc_show(
+    _m: *mut bindings::seq_file,
+    _v: *mut core::ffi::c_void,
+) -> core::ffi::c_int {
     pr_info!("proc_read is invoked\n");
     unsafe {
         bindings::seq_printf(
@@ -35,9 +38,8 @@ unsafe extern "C" fn proc_show(_m: *mut bindings::seq_file, _v: *mut core::ffi::
                 .as_char_ptr(),
         );
     }
-    0 as i32
+    0
 }
-*/
 
 struct Token;
 
@@ -48,20 +50,20 @@ impl ProcOperations for Token {
 
     fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32> {
         pr_info!("proc_open is invoked\n");
-        //unsafe {
-        //    let ret = bindings::single_open(_file, Some(Self::proc_show), ptr::null_mut());
-        //    pr_info!("single_open: ret={}\n", ret);
-        //}
+        unsafe {
+            let ret = bindings::single_open(_file, Some(proc_show), ptr::null_mut());
+            pr_info!("single_open: ret={}\n", ret);
+        }
 
         Ok(0)
     }
 
     fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {
         pr_info!("proc_release is invoked\n");
-        //unsafe {
-        //    let ret = bindings::single_release(_inode, _file);
-        //    pr_info!("single_release: ret={}\n", ret);
-        //}
+        unsafe {
+            let ret = bindings::single_release(_inode, _file);
+            pr_info!("single_release: ret={}\n", ret);
+        }
     }
 }
 
@@ -72,6 +74,7 @@ struct RustProc {
 impl kernel::Module for RustProc {
     fn init(name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
         pr_info!("{} is loaded\n", name.to_str()?);
+        pr_info!("proc_show={:#x}\n", proc_show as *mut ffi::c_void as usize);
 
         let reg = RustProcRegistration::new();
         reg.register::<Token>(ptr::null_mut())?;
