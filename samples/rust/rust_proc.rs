@@ -8,7 +8,6 @@
 
 // core is from Rust compiler, not from kernel
 use core::ffi;
-use core::marker::PhantomPinned;
 use core::ptr;
 
 use kernel::bindings;
@@ -26,16 +25,16 @@ module! {
 
 #[no_mangle]
 pub unsafe extern "C" fn proc_show(
-    _m: *mut bindings::seq_file,
+    m: *mut bindings::seq_file,
     _v: *mut core::ffi::c_void,
 ) -> core::ffi::c_int {
-    pr_info!("proc_read is invoked\n");
+    pr_info!("proc_show is invoked\n");
     unsafe {
+        let count: usize = (*m).private as *mut ffi::c_void as usize;
+        pr_info!("priv={}", count);
         bindings::seq_printf(
-            _m,
-            CString::try_from_fmt(fmt!("Hello, world!\n"))
-                .unwrap()
-                .as_char_ptr(),
+            m,
+            CString::try_from_fmt(fmt!("asdf")).unwrap().as_char_ptr(),
         );
     }
     0
@@ -50,12 +49,13 @@ impl ProcOperations for Token {
 
     fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32> {
         pr_info!("proc_open is invoked\n");
+        let ret;
         unsafe {
-            let ret = bindings::single_open(_file, Some(proc_show), ptr::null_mut());
+            ret = bindings::single_open(_file, Some(proc_show), (*_inode).i_private);
             pr_info!("single_open: ret={}\n", ret);
         }
 
-        Ok(0)
+        Ok(ret)
     }
 
     fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {
@@ -66,13 +66,33 @@ impl ProcOperations for Token {
         }
     }
 
-    fn proc_read( _file: *mut bindings::file, _buf: *mut ffi::c_char, _size: usize, _ppos: *mut bindings::loff_t) -> Result<i32> {
+    fn proc_read(
+        _file: *mut bindings::file,
+        _buf: *mut ffi::c_char,
+        _size: usize,
+        _ppos: *mut bindings::loff_t,
+    ) -> Result<isize> {
         pr_info!("proc_read is invoked\n");
+        let ret;
         unsafe {
-            let ret = bindings::seq_read(_file, _buf, _size, _ppos);
+            ret = bindings::seq_read(_file, _buf, _size, _ppos);
             pr_info!("seq_read: ret={}\n", ret);
         }
-        Ok(0)
+        Ok(ret)
+    }
+
+    fn proc_lseek(
+        _file: *mut bindings::file,
+        _offset: bindings::loff_t,
+        _whence: core::ffi::c_int,
+    ) -> Result<bindings::loff_t> {
+        pr_info!("proc_lseek is invoked\n");
+        let ret;
+        unsafe {
+            ret = bindings::seq_lseek(_file, _offset, _whence);
+            pr_info!("seq_lseek: ret={}\n", ret);
+        }
+        Ok(ret)
     }
 }
 
