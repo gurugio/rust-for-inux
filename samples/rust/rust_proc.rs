@@ -23,6 +23,7 @@ module! {
     license: "GPL",
 }
 
+/// TBD
 #[no_mangle]
 pub unsafe extern "C" fn proc_show(
     m: *mut bindings::seq_file,

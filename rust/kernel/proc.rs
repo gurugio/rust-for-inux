@@ -1,20 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0
+
+//! Printing facilities.
+//!
+//! C header: [`include/linux/printk.h`](../../../../include/linux/printk.h)
+//!
+//! Reference: <https://www.kernel.org/doc/html/latest/core-api/printk-basics.html>
+
 use crate::{
     bindings,
-    cred::Credential,
-    error::{code::*, from_kernel_result, Error, Result},
+    error::{from_kernel_result, Result},
     fmt,
-    io_buffer::{IoBufferReader, IoBufferWriter},
-    iov_iter::IovIter,
-    mm,
     str::CString,
-    sync::CondVar,
-    types::ForeignOwnable,
-    user_ptr::{UserSlicePtr, UserSlicePtrReader, UserSlicePtrWriter},
-    ARef, AlwaysRefCounted, {pr_info, pr_warn},
 };
-use core::convert::{TryFrom, TryInto};
 use core::marker::PhantomPinned;
-use core::{cell::UnsafeCell, marker, mem, ptr};
+use core::{marker, ptr};
 use macros::vtable;
 
 struct ProcOperationsVtable<T>(marker::PhantomData<T>);
@@ -25,9 +24,7 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _file: *mut bindings::file,
     ) -> core::ffi::c_int {
         from_kernel_result! {
-            pr_info!("OperationsVtable::proc_open is invoked\n");
-            let r = unsafe {T::proc_open(_inode, _file)};
-            r
+            T::proc_open(_inode, _file)
         }
     }
 
@@ -36,9 +33,8 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _file: *mut bindings::file,
     ) -> core::ffi::c_int {
         from_kernel_result! {
-        pr_info!("OperationVtable::proc_release is invoked\n");
-        let _ = unsafe {T::proc_release(_inode, _file)};
-        Ok(0)
+            let _ = T::proc_release(_inode, _file);
+            Ok(0)
         }
     }
 
@@ -49,9 +45,7 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _ppos: *mut bindings::loff_t,
     ) -> isize {
         from_kernel_result! {
-            pr_info!("OperationVtable::read is invoked\n");
-            let r = unsafe {T::proc_read(_file, _buf, _size, _ppos)};
-            r
+            T::proc_read(_file, _buf, _size, _ppos)
         }
     }
 
@@ -61,16 +55,14 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _whence: core::ffi::c_int,
     ) -> bindings::loff_t {
         from_kernel_result! {
-            pr_info!("OperationVtable::proc_lseek is invoked\n");
-            let r = unsafe {T::proc_lseek(_file, _offset, _whence)};
-            r
+            T::proc_lseek(_file, _offset, _whence)
         }
     }
 
     const VTABLE: bindings::proc_ops = bindings::proc_ops {
-        proc_flags: 0,                // mandatory to prevent build error
-        proc_get_unmapped_area: None, // mandatory to prevent build error
-        proc_read_iter: None,         // mandatory to prevent build error
+        proc_flags: 0,
+        proc_get_unmapped_area: None,
+        proc_read_iter: None,
         proc_open: Some(Self::proc_open),
         proc_read: Some(Self::proc_read),
         proc_write: None,
@@ -92,18 +84,36 @@ static _SUB_DIR_NAME: &'static str = "rust_demo";
 static PROC_FS_NAME: &'static str = "rust_proc_fs";
 static _PROC_FS_NAME_MUL: &'static str = "rust_proc_fs_mul";
 
+/// Corresponds to the kernel's `struct proc_ops`.
+///
+/// You implement this trait whenever you would create a `struct proc_ops`.
+///
+/// Proc-entry may be used from multiple threads/processes concurrently, so your type must be
+/// [`Sync`]. It must also be [`Send`] because [`ProcOperations::release`] will be called from the
+/// thread that decrements that associated file's refcount to zero.
 #[vtable]
 pub trait ProcOperations {
+    /// TBD
     type OpenData: Sync = ();
+
+    /// TBD
     type Data: Send + Sync = ();
+
+    /// TBD
     fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32>;
+
+    /// TBD
     fn proc_read(
         _file: *mut bindings::file,
         _buf: *mut core::ffi::c_char,
         _size: usize,
         _ppos: *mut bindings::loff_t,
     ) -> Result<isize>;
+
+    /// TBD
     fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {}
+
+    /// TBD
     fn proc_lseek(
         _file: *mut bindings::file,
         _offset: bindings::loff_t,
@@ -111,49 +121,47 @@ pub trait ProcOperations {
     ) -> Result<bindings::loff_t>;
 }
 
+/// TBD
 pub struct RustProcRegistration {
-    //ops: bindings::proc_ops,
-    parent: *mut bindings::proc_dir_entry,
+    _parent: *mut bindings::proc_dir_entry,
     _entry: *mut bindings::proc_dir_entry,
     _pin: PhantomPinned,
 }
 
 impl RustProcRegistration {
+    /// TBD
     pub fn new() -> Self {
-        pr_info!("RustProcregistration::new is invoked\n");
         Self {
-            parent: ptr::null_mut(),
+            _parent: ptr::null_mut(),
             _entry: ptr::null_mut(),
             _pin: PhantomPinned,
         }
     }
 
+    /// TBD
     pub fn register<T: ProcOperations<OpenData = ()>>(
         &self,
         _parent: *mut bindings::proc_dir_entry,
     ) -> Result<()> {
-        pr_info!("RustProcregistration::register is invoked\n");
         let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?;
 
         let entry: *mut bindings::proc_dir_entry = unsafe {
             bindings::proc_create(
                 entry_name.as_char_ptr(),
                 0o644,
-                ptr::null_mut(), // parent
+                ptr::null_mut(),
                 ProcOperationsVtable::<T>::build(),
             )
         };
         // How to check entry?
-        if entry.is_null() {
-            pr_info!("failed to create a proc entry\n");
-        }
+        if entry.is_null() {}
 
         Ok(())
     }
 }
 
+/// TBD
 unsafe impl Sync for RustProcRegistration {}
-unsafe impl Send for RustProcRegistration {}
 
 impl Drop for RustProcRegistration {
     fn drop(&mut self) {
@@ -161,6 +169,5 @@ impl Drop for RustProcRegistration {
             let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
             bindings::remove_proc_entry(entry_name.as_char_ptr(), ptr::null_mut());
         }
-        pr_info!("drop RustProcRegistration\n");
     }
 }
