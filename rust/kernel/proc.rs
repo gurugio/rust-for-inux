@@ -26,8 +26,8 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
     ) -> core::ffi::c_int {
         from_kernel_result! {
             pr_info!("OperationsVtable::proc_open is invoked\n");
-            let _ = unsafe {T::proc_open(_inode, _file)};
-            Ok(0)
+            let r = unsafe {T::proc_open(_inode, _file)};
+            r
         }
     }
 
@@ -50,8 +50,20 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
     ) -> isize {
         from_kernel_result! {
             pr_info!("OperationVtable::read is invoked\n");
-            let _ = unsafe {T::proc_read(_file, _buf, _size, _ppos)};
-            Ok(0)
+            let r = unsafe {T::proc_read(_file, _buf, _size, _ppos)};
+            r
+        }
+    }
+
+    unsafe extern "C" fn proc_lseek(
+        _file: *mut bindings::file,
+        _offset: bindings::loff_t,
+        _whence: core::ffi::c_int,
+    ) -> bindings::loff_t {
+        from_kernel_result! {
+            pr_info!("OperationVtable::proc_lseek is invoked\n");
+            let r = unsafe {T::proc_lseek(_file, _offset, _whence)};
+            r
         }
     }
 
@@ -62,7 +74,7 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         proc_open: Some(Self::proc_open),
         proc_read: Some(Self::proc_read),
         proc_write: None,
-        proc_lseek: None,
+        proc_lseek: Some(Self::proc_lseek),
         proc_release: Some(Self::proc_release),
         proc_poll: None,
         proc_ioctl: None,
@@ -85,8 +97,18 @@ pub trait ProcOperations {
     type OpenData: Sync = ();
     type Data: Send + Sync = ();
     fn proc_open(_inode: *mut bindings::inode, _file: *mut bindings::file) -> Result<i32>;
-    fn proc_read(_file: *mut bindings::file, _buf: *mut core::ffi::c_char, _size: usize, _ppos: *mut bindings::loff_t) -> Result<i32>;
+    fn proc_read(
+        _file: *mut bindings::file,
+        _buf: *mut core::ffi::c_char,
+        _size: usize,
+        _ppos: *mut bindings::loff_t,
+    ) -> Result<isize>;
     fn proc_release(_inode: *mut bindings::inode, _file: *mut bindings::file) {}
+    fn proc_lseek(
+        _file: *mut bindings::file,
+        _offset: bindings::loff_t,
+        _whence: core::ffi::c_int,
+    ) -> Result<bindings::loff_t>;
 }
 
 pub struct RustProcRegistration {
