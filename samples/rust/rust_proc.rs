@@ -106,8 +106,11 @@ impl kernel::Module for RustProc {
         pr_info!("{} is loaded\n", name.to_str()?);
         pr_info!("proc_show={:#x}\n", proc_show as *mut ffi::c_void as usize);
 
-        let reg = RustProcRegistration::new();
-        reg.register::<Token>(ptr::null_mut())?;
+        let reg = RustProcRegistration::new(parent);
+        reg.mkdir(parent_name)?;
+        reg.register::<Token>()?;
+
+        // TODO: make another entry: "rust_proc_fs_mul";
 
         Ok(Self { _reg: reg })
     }
