@@ -47,4 +47,9 @@ config SAMPLE_RUST_HOSTPROGS
 
 	  If unsure, say N.
 
+config SAMPLE_RUST_LDD02
+	tristate "LDD02"
+	help
+	  This option builds the Rust Linux Device Drivers examples
+
 endif # SAMPLES_RUST

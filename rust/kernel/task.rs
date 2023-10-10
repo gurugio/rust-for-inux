@@ -4,7 +4,7 @@
 //!
 //! C header: [`include/linux/sched.h`](../../../../include/linux/sched.h).
 
-use crate::{bindings, types::Opaque};
+use crate::{bindings, str::CStr, types::Opaque};
 use core::{marker::PhantomData, ops::Deref, ptr};
 
 /// Returns the currently running task.
@@ -130,6 +130,15 @@ impl Task {
         // SAFETY: By the type invariant, we know that `self.0` is a valid task. Valid tasks always
         // have a valid pid.
         unsafe { *ptr::addr_of!((*self.0.get()).pid) }
+    }
+
+    /// Returns the comm filed of the given task
+    pub fn comm(&self) -> &CStr {
+        unsafe {
+            let ptr: &[i8; 16] = &(*self.0.get()).comm;
+            let ptr = &*(ptr as *const [i8] as *const [u8]);
+            CStr::from_bytes_with_nul_unchecked(&*ptr::addr_of!(ptr[0..ptr.len()]))
+        }
     }
 
     /// Determines whether the given task has pending signals.
