@@ -42,9 +42,10 @@ pub mod fs;
 pub mod init;
 pub mod io_buffer;
 pub mod ioctl;
+pub mod iov_iter;
 #[cfg(CONFIG_KUNIT)]
 pub mod kunit;
-pub mod iov_iter;
+pub mod miscdev;
 pub mod mm;
 pub mod pages;
 pub mod prelude;
@@ -99,7 +100,6 @@ impl ThisModule {
     pub const unsafe fn from_ptr(ptr: *mut bindings::module) -> ThisModule {
         ThisModule(ptr)
     }
-
 }
 /// Calculates the offset of a field from the beginning of the struct it belongs to.
 ///
