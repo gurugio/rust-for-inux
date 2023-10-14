@@ -8,7 +8,7 @@
 
 use crate::{
     bindings,
-    error::{from_kernel_result, Result},
+    error::{from_err_ptr, from_result, Result},
     fmt,
     str::CString,
 };
@@ -23,19 +23,17 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _inode: *mut bindings::inode,
         _file: *mut bindings::file,
     ) -> core::ffi::c_int {
-        from_kernel_result! {
-            T::proc_open(_inode, _file)
-        }
+        from_result(|| T::proc_open(_inode, _file))
     }
 
     unsafe extern "C" fn proc_release(
         _inode: *mut bindings::inode,
         _file: *mut bindings::file,
     ) -> core::ffi::c_int {
-        from_kernel_result! {
+        from_result(|| {
             let _ = T::proc_release(_inode, _file);
             Ok(0)
-        }
+        })
     }
 
     unsafe extern "C" fn proc_read(
@@ -44,9 +42,7 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _size: usize,
         _ppos: *mut bindings::loff_t,
     ) -> isize {
-        from_kernel_result! {
-            T::proc_read(_file, _buf, _size, _ppos)
-        }
+        from_result(|| T::proc_read(_file, _buf, _size, _ppos))
     }
 
     unsafe extern "C" fn proc_lseek(
@@ -54,9 +50,7 @@ impl<T: ProcOperations> ProcOperationsVtable<T> {
         _offset: bindings::loff_t,
         _whence: core::ffi::c_int,
     ) -> bindings::loff_t {
-        from_kernel_result! {
-            T::proc_lseek(_file, _offset, _whence)
-        }
+        from_result(|| T::proc_lseek(_file, _offset, _whence))
     }
 
     const VTABLE: bindings::proc_ops = bindings::proc_ops {
@@ -119,45 +113,40 @@ pub trait ProcOperations {
 
 /// TBD
 pub struct RustProcRegistration {
-    _parent: *mut bindings::proc_dir_entry,
-    _entry: *mut bindings::proc_dir_entry,
+    parent: *mut bindings::proc_dir_entry,
+    dir: *mut bindings::proc_dir_entry,
+    entry: *mut bindings::proc_dir_entry,
     _pin: PhantomPinned,
 }
 
 impl RustProcRegistration {
     /// TBD
-    pub fn new(parent: *mut bindings::proc_dir_entry) -> Self {
+    pub fn new(parent: *mut bindings::proc_dir_entry, filename: CString) -> Self {
         Self {
-            _parent: parent,
-            _entry: ptr::null_mut(),
+            parent,
+            dir: ptr::null_mut(),
+            entry: ptr::null_mut(),
             _pin: PhantomPinned,
         }
     }
 
-    pub fn mkdir(&self, name: &CString) -> Result<()> {
-        // TODO: implement!
-        let parent = bindings::proc_mkdir(
-            CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?.as_char_ptr(),
-            ptr::null_mut(),
-        );
+    pub fn mkdir(&mut self, name: &CString) -> Result<()> {
+        self.dir = unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), self.parent)) }?;
         Ok(())
     }
 
     /// TBD
-    pub fn register<T: ProcOperations<OpenData = ()>>(&self) -> Result<()> {
-        let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME))?;
-
+    pub fn register<T: ProcOperations<OpenData = ()>>(&mut self, filename: &CString) -> Result<()> {
         let entry: *mut bindings::proc_dir_entry = unsafe {
-            bindings::proc_create(
-                entry_name.as_char_ptr(),
+            from_err_ptr(bindings::proc_create(
+                filename.as_char_ptr(),
                 0o644,
-                self._parent,
+                self.dir,
                 ProcOperationsVtable::<T>::build(),
-            )
-        };
-        // TODO: How to check entry?
-        if entry.is_null() {}
+            ))
+        }?;
 
+        self.entry = entry;
         Ok(())
     }
 }
@@ -168,10 +157,12 @@ unsafe impl Sync for RustProcRegistration {}
 impl Drop for RustProcRegistration {
     fn drop(&mut self) {
         unsafe {
-            let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
-            bindings::remove_proc_entry(entry_name.as_char_ptr(), self._parent);
-            let parent_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME)).unwrap();
-            bindings::remove_proc_entry(_SUB_DIR_NAME.as_char_ptr(), ptr::null_mut());
+            //let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
+            //bindings::remove_proc_entry(entry_name.as_char_ptr(), self._parent);
+            //let parent_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME)).unwrap();
+            //bindings::remove_proc_entry(_SUB_DIR_NAME.as_char_ptr(), ptr::null_mut());
+            bindings::proc_remove(self.entry);
+            bindings::proc_remove(self.dir)
         }
     }
 }

@@ -106,7 +106,7 @@ impl kernel::Module for RustProc {
         pr_info!("{} is loaded\n", name.to_str()?);
         pr_info!("proc_show={:#x}\n", proc_show as *mut ffi::c_void as usize);
 
-        let reg = RustProcRegistration::new(parent);
+        let reg = RustProcRegistration::new(core::ptr::null_mut());
         reg.mkdir(parent_name)?;
         reg.register::<Token>()?;
 
