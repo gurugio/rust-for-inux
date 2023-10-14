@@ -57,7 +57,7 @@ config SAMPLE_RUST_LDD03
 	help
 	  This option builds the Rust Linux Device Drivers examples
 
-config SAMPLE_RUST_LDD_CH04
+config SAMPLE_RUST_LDD04
 	tristate "Linux Device Driver proc in Rust"
 	help
 	  This option builds the Linux Device Driver examples in Rust.
