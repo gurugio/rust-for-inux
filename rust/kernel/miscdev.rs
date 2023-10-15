@@ -10,7 +10,7 @@ use crate::bindings;
 use crate::error::{code::*, Error, Result};
 use crate::file;
 //use crate::{device, str::CStr, str::CString, ThisModule};
-use crate::{str::CStr, str::CString, ThisModule};
+use crate::str::CString;
 use alloc::boxed::Box;
 use core::marker::PhantomPinned;
 use core::{fmt, mem::MaybeUninit, pin::Pin};
