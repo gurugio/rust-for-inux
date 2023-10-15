@@ -132,14 +132,7 @@ impl RustProcRegistration {
         name: &CString,
         parent: *mut bindings::proc_dir_entry,
     ) -> Result<*mut bindings::proc_dir_entry> {
-        // TODO: setting parent generated panic!!!
-        //unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), parent)) }
-        unsafe {
-            from_err_ptr(bindings::proc_mkdir(
-                name.as_char_ptr(),
-                core::ptr::null_mut(),
-            ))
-        }
+        unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), parent)) }
     }
 
     /// TBD

@@ -27,15 +27,22 @@ pub unsafe extern "C" fn proc_show(
     _v: *mut core::ffi::c_void,
 ) -> core::ffi::c_int {
     pr_info!("proc_show is invoked\n");
+
     unsafe {
-        let count: usize = (*m).private as *mut ffi::c_void as usize;
-        pr_info!("priv={}", count);
-        bindings::seq_printf(
-            m,
-            CString::try_from_fmt(fmt!("Hello World!\n"))
-                .unwrap()
-                .as_char_ptr(),
-        );
+        let mut count: usize = (*m).private as *mut ffi::c_void as usize;
+
+        if count == 0 {
+            count = 1;
+        }
+
+        for _ in 0..count {
+            bindings::seq_printf(
+                m,
+                CString::try_from_fmt(fmt!("Hello World!\n"))
+                    .unwrap()
+                    .as_char_ptr(),
+            );
+        }
     }
     0
 }
