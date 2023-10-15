@@ -113,7 +113,7 @@ pub trait ProcOperations {
 /// TBD
 pub struct RustProcRegistration {
     parent: *mut bindings::proc_dir_entry,
-    dir: *mut bindings::proc_dir_entry,
+    pub dir: *mut bindings::proc_dir_entry,
     entry: *mut bindings::proc_dir_entry,
     _pin: PhantomPinned,
 }
@@ -136,15 +136,31 @@ impl RustProcRegistration {
     }
 
     /// TBD
-    pub fn register<T: ProcOperations<OpenData = ()>>(&mut self, filename: &CString) -> Result<()> {
-        let entry: *mut bindings::proc_dir_entry = unsafe {
-            from_err_ptr(bindings::proc_create(
-                filename.as_char_ptr(),
-                0o644,
-                self.dir,
-                ProcOperationsVtable::<T>::build(),
-            ))
-        }?;
+    pub fn register<T: ProcOperations<OpenData = ()>>(
+        &mut self,
+        filename: &CString,
+        data: Option<usize>,
+    ) -> Result<()> {
+        let entry: *mut bindings::proc_dir_entry = if data.is_none() {
+            unsafe {
+                from_err_ptr(bindings::proc_create(
+                    filename.as_char_ptr(),
+                    0o644,
+                    self.dir,
+                    ProcOperationsVtable::<T>::build(),
+                ))
+            }?
+        } else {
+            unsafe {
+                from_err_ptr(bindings::proc_create_data(
+                    filename.as_char_ptr(),
+                    0o644,
+                    self.dir,
+                    ProcOperationsVtable::<T>::build(),
+                    data.unwrap() as *mut usize as *mut core::ffi::c_void,
+                ))
+            }?
+        };
 
         self.entry = entry;
         Ok(())

@@ -106,12 +106,15 @@ impl kernel::Module for RustProc {
 
         let dirname: CString = CString::try_from_fmt(fmt!("proc_demo")).unwrap();
         let filename: CString = CString::try_from_fmt(fmt!("proc_fs")).unwrap();
+        let filename_mul = CString::try_from_fmt(fmt!("proc_fs_mul")).unwrap();
 
         let mut reg = RustProcRegistration::new(core::ptr::null_mut());
         reg.mkdir(&dirname)?;
-        reg.register::<Token>(&filename)?;
+        reg.register::<Token>(&filename, None)?;
 
-        // TODO: make another entry: "rust_proc_fs_mul";
+        // set the same directory
+        let mut reg = RustProcRegistration::new(reg.dir);
+        reg.register::<Token>(&filename_mul, Some(3))?;
 
         Ok(Self { _reg: reg })
     }
