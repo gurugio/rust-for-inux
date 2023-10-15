@@ -112,27 +112,34 @@ pub trait ProcOperations {
 
 /// TBD
 pub struct RustProcRegistration {
-    parent: *mut bindings::proc_dir_entry,
-    pub dir: *mut bindings::proc_dir_entry,
+    dir: *mut bindings::proc_dir_entry,
     entry: *mut bindings::proc_dir_entry,
     _pin: PhantomPinned,
 }
 
 impl RustProcRegistration {
     /// TBD
-    pub fn new(parent: *mut bindings::proc_dir_entry) -> Self {
+    pub fn new(dir: *mut bindings::proc_dir_entry) -> Self {
         Self {
-            parent,
-            dir: ptr::null_mut(),
+            dir,
             entry: ptr::null_mut(),
             _pin: PhantomPinned,
         }
     }
 
     /// TBD
-    pub fn mkdir(&mut self, name: &CString) -> Result<()> {
-        self.dir = unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), self.parent)) }?;
-        Ok(())
+    pub fn mkdir(
+        name: &CString,
+        parent: *mut bindings::proc_dir_entry,
+    ) -> Result<*mut bindings::proc_dir_entry> {
+        // TODO: setting parent generated panic!!!
+        //unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), parent)) }
+        unsafe {
+            from_err_ptr(bindings::proc_mkdir(
+                name.as_char_ptr(),
+                core::ptr::null_mut(),
+            ))
+        }
     }
 
     /// TBD
@@ -173,10 +180,6 @@ unsafe impl Sync for RustProcRegistration {}
 impl Drop for RustProcRegistration {
     fn drop(&mut self) {
         unsafe {
-            //let entry_name = CString::try_from_fmt(fmt!("{}", PROC_FS_NAME)).unwrap();
-            //bindings::remove_proc_entry(entry_name.as_char_ptr(), self._parent);
-            //let parent_name = CString::try_from_fmt(fmt!("{}", SUB_DIR_NAME)).unwrap();
-            //bindings::remove_proc_entry(_SUB_DIR_NAME.as_char_ptr(), ptr::null_mut());
             bindings::proc_remove(self.entry);
             bindings::proc_remove(self.dir)
         }

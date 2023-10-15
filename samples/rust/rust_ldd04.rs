@@ -97,7 +97,7 @@ impl ProcOperations for Token {
 }
 
 struct RustProc {
-    _reg: RustProcRegistration,
+    _regs: Vec<RustProcRegistration>,
 }
 
 impl kernel::Module for RustProc {
@@ -108,15 +108,19 @@ impl kernel::Module for RustProc {
         let filename: CString = CString::try_from_fmt(fmt!("proc_fs")).unwrap();
         let filename_mul = CString::try_from_fmt(fmt!("proc_fs_mul")).unwrap();
 
-        let mut reg = RustProcRegistration::new(core::ptr::null_mut());
-        reg.mkdir(&dirname)?;
+        let dir = RustProcRegistration::mkdir(&dirname, core::ptr::null_mut())?;
+
+        let mut regs = Vec::new();
+
+        let mut reg = RustProcRegistration::new(dir);
         reg.register::<Token>(&filename, None)?;
+        regs.try_push(reg)?;
 
-        // set the same directory
-        let mut reg = RustProcRegistration::new(reg.dir);
+        let mut reg = RustProcRegistration::new(dir);
         reg.register::<Token>(&filename_mul, Some(3))?;
+        regs.try_push(reg)?;
 
-        Ok(Self { _reg: reg })
+        Ok(Self { _regs: regs })
     }
 }
 
