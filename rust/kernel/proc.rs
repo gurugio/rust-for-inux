@@ -9,7 +9,6 @@
 use crate::{
     bindings,
     error::{from_err_ptr, from_result, Result},
-    fmt,
     str::CString,
 };
 use core::marker::PhantomPinned;
@@ -121,7 +120,7 @@ pub struct RustProcRegistration {
 
 impl RustProcRegistration {
     /// TBD
-    pub fn new(parent: *mut bindings::proc_dir_entry, filename: CString) -> Self {
+    pub fn new(parent: *mut bindings::proc_dir_entry) -> Self {
         Self {
             parent,
             dir: ptr::null_mut(),
@@ -130,6 +129,7 @@ impl RustProcRegistration {
         }
     }
 
+    /// TBD
     pub fn mkdir(&mut self, name: &CString) -> Result<()> {
         self.dir = unsafe { from_err_ptr(bindings::proc_mkdir(name.as_char_ptr(), self.parent)) }?;
         Ok(())

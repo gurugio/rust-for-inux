@@ -8,12 +8,9 @@
 
 // core is from Rust compiler, not from kernel
 use core::ffi;
-use core::ptr;
 
-use kernel::bindings;
-use kernel::prelude::*;
 use kernel::proc::{ProcOperations, RustProcRegistration};
-use kernel::str::CString;
+use kernel::{bindings, fmt, prelude::*, str::CString};
 
 module! {
     type: RustProc,
@@ -35,7 +32,9 @@ pub unsafe extern "C" fn proc_show(
         pr_info!("priv={}", count);
         bindings::seq_printf(
             m,
-            CString::try_from_fmt(fmt!("asdf")).unwrap().as_char_ptr(),
+            CString::try_from_fmt(fmt!("Hello World!\n"))
+                .unwrap()
+                .as_char_ptr(),
         );
     }
     0
@@ -102,13 +101,15 @@ struct RustProc {
 }
 
 impl kernel::Module for RustProc {
-    fn init(name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
-        pr_info!("{} is loaded\n", name.to_str()?);
-        pr_info!("proc_show={:#x}\n", proc_show as *mut ffi::c_void as usize);
+    fn init(_module: &'static ThisModule) -> Result<Self> {
+        pr_info!("rust_ldd04 is loaded\n");
 
-        let reg = RustProcRegistration::new(core::ptr::null_mut());
-        reg.mkdir(parent_name)?;
-        reg.register::<Token>()?;
+        let dirname: CString = CString::try_from_fmt(fmt!("proc_demo")).unwrap();
+        let filename: CString = CString::try_from_fmt(fmt!("proc_fs")).unwrap();
+
+        let mut reg = RustProcRegistration::new(core::ptr::null_mut());
+        reg.mkdir(&dirname)?;
+        reg.register::<Token>(&filename)?;
 
         // TODO: make another entry: "rust_proc_fs_mul";
 
