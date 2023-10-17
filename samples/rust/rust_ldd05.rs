@@ -92,16 +92,11 @@ pub unsafe extern "C" fn proc_seq_stop(
 /// TBD
 pub unsafe extern "C" fn proc_seq_show(
     s_file: *mut bindings::seq_file,
-    _v: *mut core::ffi::c_void,
+    v: *mut core::ffi::c_void,
 ) -> core::ffi::c_int {
     pr_info!("proc_seq_show is invoked\n");
     unsafe {
-        bindings::seq_printf(
-            s_file,
-            CString::try_from_fmt(fmt!("seq_printf in proc_seq_show\n"))
-                .unwrap()
-                .as_char_ptr(),
-        );
+        bindings::seq_printf(s_file, v as *const i8);
     }
     0
 }
