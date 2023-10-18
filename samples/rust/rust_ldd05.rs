@@ -53,7 +53,7 @@ pub unsafe extern "C" fn proc_seq_start(
         return ptr::null_mut();
     }
 
-    CString::try_from_fmt(fmt!("{}", MESSAGES[pos]))
+    CString::try_from_fmt(fmt!("{}\n", MESSAGES[pos]))
         .unwrap()
         .as_char_ptr() as *mut core::ffi::c_void
 }
@@ -75,7 +75,7 @@ pub unsafe extern "C" fn proc_seq_next(
             return ptr::null_mut();
         }
 
-        CString::try_from_fmt(fmt!("{}", MESSAGES[*pos as usize]))
+        CString::try_from_fmt(fmt!("{}\n", MESSAGES[*pos as usize]))
             .unwrap()
             .as_char_ptr() as *mut core::ffi::c_void
     }
