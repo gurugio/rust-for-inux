@@ -11,7 +11,7 @@ use core::ffi;
 
 use core::ptr;
 use kernel::proc::{ProcOperations, RustProcRegistration};
-use kernel::{bindings, fmt, prelude::*, str::CString};
+use kernel::{bindings, c_str, fmt, prelude::*, str::CString};
 
 module! {
     type: RustProcFsIterator,
@@ -21,14 +21,14 @@ module! {
     license: "GPL",
 }
 
-const MESSAGES: [&'static str; 7] = [
-    "Day 1: God creates the heavens and the earth.",
-    "Day 2: God creates the sky.",
-    "Day 3: God creates dry land and all plant life both large and small.",
-    "Day 4: God creates all the stars and heavenly bodies.",
-    "Day 5: God creates all life that lives in the water.",
-    "Day 6: God creates all the creatures that live on dry land.",
-    "Day 7: God rests.",
+const MESSAGES: [&CStr; 7] = [
+    c_str!("Day 1: God creates the heavens and the earth.\n"),
+    c_str!("Day 2: God creates the sky.\n"),
+    c_str!("Day 3: God creates dry land and all plant life both large and small.\n"),
+    c_str!("Day 4: God creates all the stars and heavenly bodies.\n"),
+    c_str!("Day 5: God creates all life that lives in the water.\n"),
+    c_str!("Day 6: God creates all the creatures that live on dry land.\n"),
+    c_str!("Day 7: God rests.\n"),
 ];
 
 const PROC_SEQ_OPS: bindings::seq_operations = bindings::seq_operations {
@@ -53,9 +53,7 @@ pub unsafe extern "C" fn proc_seq_start(
         return ptr::null_mut();
     }
 
-    CString::try_from_fmt(fmt!("{}\n", MESSAGES[pos]))
-        .unwrap()
-        .as_char_ptr() as *mut core::ffi::c_void
+    MESSAGES[pos].as_char_ptr() as *mut core::ffi::c_void
 }
 
 /// TBD
@@ -75,9 +73,7 @@ pub unsafe extern "C" fn proc_seq_next(
             return ptr::null_mut();
         }
 
-        CString::try_from_fmt(fmt!("{}\n", MESSAGES[*pos as usize]))
-            .unwrap()
-            .as_char_ptr() as *mut core::ffi::c_void
+        MESSAGES[*pos as usize].as_char_ptr() as *mut core::ffi::c_void
     }
 }
 
