@@ -71,4 +71,11 @@ config SAMPLE_RUST_LDD05
 
 	  If unsure, say N.
 
+config SAMPLE_RUST_LDD06
+	tristate "LDD06
+	help
+	  This option builds the Linux Device Driver examples in Rust.
+
+	  If unsure, say N.
+
 endif # SAMPLES_RUST
