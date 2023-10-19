@@ -7,5 +7,6 @@ obj-$(CONFIG_SAMPLE_RUST_LDD02)			+= rust_ldd02.o
 obj-$(CONFIG_SAMPLE_RUST_LDD03)			+= rust_ldd03.o
 obj-$(CONFIG_SAMPLE_RUST_LDD04)			+= rust_ldd04.o
 obj-$(CONFIG_SAMPLE_RUST_LDD05)			+= rust_ldd05.o
+obj-$(CONFIG_SAMPLE_RUST_LDD06)			+= rust_ldd06.o
 
 subdir-$(CONFIG_SAMPLE_RUST_HOSTPROGS)		+= hostprogs
