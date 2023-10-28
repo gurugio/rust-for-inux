@@ -5,16 +5,20 @@
 //!
 //! How to build only modules:
 //! make LLVM=1 M=samples/rust
-use core::marker::PhantomPinned;
+//!
+//! How to use:
+//! / # insmod rust_ldd06.ko
+//! / # mknod /dev/rust_ldd06 c 10 124
+//! / # echo "hello" > /dev/rust_ldd06
+//! / # cat /dev/rust_ldd06
 use kernel::prelude::*;
 use kernel::{
     bindings,
     file::{self, File},
     fmt,
     io_buffer::{IoBufferReader, IoBufferWriter},
-    miscdev, pin_init,
-    sync::{Arc, ArcBorrow},
-    types::Opaque,
+    miscdev, new_mutex, pin_init,
+    sync::{Arc, ArcBorrow, Mutex},
 };
 
 module! {
@@ -25,24 +29,40 @@ module! {
     license: "GPL",
 }
 
+// Fist I made CompletionDev { completion: bindings::completion }.
+// But it didn't work because we cannot get mutable reference to CompletionDev in read/write functions.
+// The argument of read/write functions is ArcBorrow<'_, CompletionDev>.
+// So it's not allowed to get the mutable reference to CompletionDev.
+// The only way to mutate through ArcBorrow is to use Mutex/RwLock/Atomic types.
+// (see doc.rust-lang.org/std/sync/struct.Mutex.html)
+// Finally I makde CompletionInner struct and put it into Mutex.
+struct CompletionInner {
+    completion: bindings::completion,
+    dummy: usize, // nothing but to check how to use Mutex
+}
+
 // internal info between file operations
 #[pin_data]
 struct CompletionDev {
     pub completion: bindings::completion,
 
     #[pin]
-    _pin: PhantomPinned,
+    inner: Mutex<CompletionInner>,
 }
 
 // TODO: impl CompletionDev::try_new
 impl CompletionDev {
     fn try_new() -> Result<Arc<Self>> {
         pr_info!("completion_dev created\n");
+        let dev = Arc::pin_init(pin_init!(Self {
+            completion: bindings::completion::default(), // Default trait is implmented by bindget. See rust/bindings/bindings_generates.rs
+            inner <- new_mutex!(CompletionInner {
+                completion: bindings::completion::default(),
+                dummy: 0,
+            }),
+        }))?;
 
-        Ok(Arc::try_new(Self {
-            _pin: PhantomPinned,
-            completion: bindings::completion::default(),
-        })?)
+        Ok(dev)
     }
 }
 
@@ -66,10 +86,18 @@ impl file::Operations for RustFile {
     fn read(
         shared: ArcBorrow<'_, CompletionDev>,
         _: &File,
-        data: &mut impl IoBufferWriter,
-        offset: u64,
+        _data: &mut impl IoBufferWriter,
+        _offset: u64,
     ) -> Result<usize> {
         pr_info!("read is invoked\n");
+
+        let mut inner_guard = shared.inner.lock();
+        inner_guard.dummy += 1;
+        pr_info!("read:dummy={}\n", inner_guard.dummy);
+
+        unsafe {
+            bindings::wait_for_completion(&mut inner_guard.completion);
+        }
 
         Ok(0)
     }
@@ -78,17 +106,31 @@ impl file::Operations for RustFile {
         shared: ArcBorrow<'_, CompletionDev>,
         _: &File,
         data: &mut impl IoBufferReader,
-        offset: u64,
+        _offset: u64,
     ) -> Result<usize> {
         pr_debug!("write is invoked\n");
 
-        let len: usize = data.len();
-        pr_info!("write: {} bytes\n", len);
-        Ok(len)
+        let mut inner_guard = shared.inner.lock();
+        pr_info!("write:dummy={}\n", inner_guard.dummy);
+        if inner_guard.dummy == 1 {
+            pr_info!("read() is waiting for completion\n");
+
+            unsafe {
+                bindings::complete(&mut inner_guard.completion);
+            }
+        } else if inner_guard.dummy == 0 {
+            pr_info!("read() is not waiting for completion\n");
+        } else {
+            pr_info!("Something went wrong\n");
+        }
+
+        // return non-zero value to avoid infinite re-try
+        Ok(data.len())
     }
 
-    fn release(_data: Self::Data, _file: &File) {
+    fn release(data: Self::Data, _file: &File) {
         pr_info!("release is invoked\n");
+        pr_info!("release:dummy={}\n", data.inner.lock().dummy);
     }
 }
 
@@ -101,6 +143,7 @@ impl kernel::Module for RustCompletion {
         pr_info!("rust_ldd06 is loaded\n");
 
         let dev: Arc<CompletionDev> = CompletionDev::try_new()?;
+
         let reg = miscdev::Registration::new_pinned(fmt!("rust_ldd06"), dev)?;
 
         Ok(RustCompletion { _dev: reg })
