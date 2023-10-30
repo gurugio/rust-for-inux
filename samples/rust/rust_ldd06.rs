@@ -38,7 +38,6 @@ module! {
 // Finally I makde CompletionInner struct and put it into Mutex.
 struct CompletionInner {
     completion: bindings::completion,
-    dummy: usize, // nothing but to check how to use Mutex
 }
 
 // internal info between file operations
@@ -74,7 +73,6 @@ impl CompletionDev {
         let dev = Arc::pin_init(pin_init!(Self {
             inner <- new_mutex!(CompletionInner {
                 completion: compl,
-                dummy: 0,
             }),
         }))?;
 
@@ -108,9 +106,6 @@ impl file::Operations for RustFile {
         pr_info!("read is invoked\n");
 
         let mut inner_guard = shared.inner.lock();
-        inner_guard.dummy += 1;
-        pr_info!("read:dummy={}\n", inner_guard.dummy);
-
         unsafe {
             bindings::wait_for_completion(&mut inner_guard.completion);
         }
@@ -127,26 +122,16 @@ impl file::Operations for RustFile {
         pr_info!("write is invoked\n");
 
         let mut inner_guard = shared.inner.lock();
-        pr_info!("write:dummy={}\n", inner_guard.dummy);
-        if inner_guard.dummy == 1 {
-            pr_info!("read() is waiting for completion\n");
-
-            unsafe {
-                bindings::complete(&mut inner_guard.completion);
-            }
-        } else if inner_guard.dummy == 0 {
-            pr_info!("read() is not waiting for completion\n");
-        } else {
-            pr_info!("Something went wrong\n");
+        unsafe {
+            bindings::complete(&mut inner_guard.completion);
         }
 
         // return non-zero value to avoid infinite re-try
         Ok(data.len())
     }
 
-    fn release(data: Self::Data, _file: &File) {
+    fn release(_data: Self::Data, _file: &File) {
         pr_info!("release is invoked\n");
-        pr_info!("release:dummy={}\n", data.inner.lock().dummy);
     }
 }
 
