@@ -9,11 +9,11 @@
 //! How to use:
 //! / # insmod rust_ldd06.ko
 //! / # mknod /dev/rust_ldd06 c 10 124
+//! / # cat /dev/rust_ldd06 &
 //! / # echo "hello" > /dev/rust_ldd06
-//! / # cat /dev/rust_ldd06
 use kernel::prelude::*;
 use kernel::{
-    bindings,
+    bindings, c_str,
     file::{self, File},
     fmt,
     io_buffer::{IoBufferReader, IoBufferWriter},
@@ -25,7 +25,7 @@ module! {
     type: RustCompletion,
     name: "rust_completion",
     author: "Rust for Linux Contributors",
-    description: "Rust LDD ch06 scull",
+    description: "Rust LDD ch06",
     license: "GPL",
 }
 
@@ -44,8 +44,6 @@ struct CompletionInner {
 // internal info between file operations
 #[pin_data]
 struct CompletionDev {
-    pub completion: bindings::completion,
-
     #[pin]
     inner: Mutex<CompletionInner>,
 }
@@ -54,10 +52,28 @@ struct CompletionDev {
 impl CompletionDev {
     fn try_new() -> Result<Arc<Self>> {
         pr_info!("completion_dev created\n");
+
+        //
+        // #define init_swait_queue_head(q)				\
+        // do {							\
+        //    static struct lock_class_key __key;		\
+        //    __init_swait_queue_head((q), #q, &__key);	\
+        //} while (0)
+        let mut compl = bindings::completion::default();
+        let compl_name = c_str!("completion_dev");
+        let mut key: bindings::lock_class_key = bindings::lock_class_key::default();
+        compl.done = 0;
+        unsafe {
+            bindings::__init_swait_queue_head(
+                &mut compl.wait,
+                compl_name.as_char_ptr() as *mut core::ffi::c_char,
+                &mut key,
+            );
+        }
+
         let dev = Arc::pin_init(pin_init!(Self {
-            completion: bindings::completion::default(), // Default trait is implmented by bindget. See rust/bindings/bindings_generates.rs
             inner <- new_mutex!(CompletionInner {
-                completion: bindings::completion::default(),
+                completion: compl,
                 dummy: 0,
             }),
         }))?;
@@ -108,7 +124,7 @@ impl file::Operations for RustFile {
         data: &mut impl IoBufferReader,
         _offset: u64,
     ) -> Result<usize> {
-        pr_debug!("write is invoked\n");
+        pr_info!("write is invoked\n");
 
         let mut inner_guard = shared.inner.lock();
         pr_info!("write:dummy={}\n", inner_guard.dummy);
