@@ -19,6 +19,7 @@ use kernel::{
     io_buffer::{IoBufferReader, IoBufferWriter},
     miscdev, new_mutex, pin_init,
     sync::{Arc, ArcBorrow, Mutex},
+    types::Opaque,
 };
 
 module! {
@@ -29,22 +30,11 @@ module! {
     license: "GPL",
 }
 
-// Fist I made CompletionDev { completion: bindings::completion }.
-// But it didn't work because we cannot get mutable reference to CompletionDev in read/write functions.
-// The argument of read/write functions is ArcBorrow<'_, CompletionDev>.
-// So it's not allowed to get the mutable reference to CompletionDev.
-// The only way to mutate through ArcBorrow is to use Mutex/RwLock/Atomic types.
-// (see doc.rust-lang.org/std/sync/struct.Mutex.html)
-// Finally I makde CompletionInner struct and put it into Mutex.
-struct CompletionInner {
-    completion: bindings::completion,
-}
-
 // internal info between file operations
 #[pin_data]
 struct CompletionDev {
     #[pin]
-    inner: Mutex<CompletionInner>,
+    completion: Opaque<bindings::completion>,
 }
 
 // TODO: impl CompletionDev::try_new
@@ -63,17 +53,11 @@ impl CompletionDev {
         let mut key: bindings::lock_class_key = bindings::lock_class_key::default();
         compl.done = 0;
         unsafe {
-            bindings::__init_swait_queue_head(
-                &mut compl.wait,
-                compl_name.as_char_ptr() as *mut core::ffi::c_char,
-                &mut key,
-            );
+            bindings::__init_swait_queue_head(&mut compl.wait, compl_name.as_char_ptr(), &mut key);
         }
 
         let dev = Arc::pin_init(pin_init!(Self {
-            inner <- new_mutex!(CompletionInner {
-                completion: compl,
-            }),
+            completion: Opaque::new(compl),
         }))?;
 
         Ok(dev)
@@ -105,9 +89,8 @@ impl file::Operations for RustFile {
     ) -> Result<usize> {
         pr_info!("read is invoked\n");
 
-        let mut inner_guard = shared.inner.lock();
         unsafe {
-            bindings::wait_for_completion(&mut inner_guard.completion);
+            bindings::wait_for_completion(Opaque::raw_get(&shared.completion));
         }
 
         Ok(0)
@@ -121,9 +104,8 @@ impl file::Operations for RustFile {
     ) -> Result<usize> {
         pr_info!("write is invoked\n");
 
-        let mut inner_guard = shared.inner.lock();
         unsafe {
-            bindings::complete(&mut inner_guard.completion);
+            bindings::complete(Opaque::raw_get(&shared.completion));
         }
 
         // return non-zero value to avoid infinite re-try
