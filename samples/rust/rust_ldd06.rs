@@ -17,8 +17,8 @@ use kernel::{
     file::{self, File},
     fmt,
     io_buffer::{IoBufferReader, IoBufferWriter},
-    miscdev, new_mutex, pin_init,
-    sync::{Arc, ArcBorrow, Mutex},
+    miscdev, pin_init,
+    sync::{Arc, ArcBorrow},
     types::Opaque,
 };
 
@@ -30,34 +30,33 @@ module! {
     license: "GPL",
 }
 
-// internal info between file operations
 #[pin_data]
 struct CompletionDev {
     #[pin]
     completion: Opaque<bindings::completion>,
 }
 
-// TODO: impl CompletionDev::try_new
 impl CompletionDev {
     fn try_new() -> Result<Arc<Self>> {
         pr_info!("completion_dev created\n");
 
-        //
-        // #define init_swait_queue_head(q)				\
-        // do {							\
-        //    static struct lock_class_key __key;		\
-        //    __init_swait_queue_head((q), #q, &__key);	\
-        //} while (0)
         let mut compl = bindings::completion::default();
         let compl_name = c_str!("completion_dev");
         let mut key: bindings::lock_class_key = bindings::lock_class_key::default();
         compl.done = 0;
-        unsafe {
-            bindings::__init_swait_queue_head(&mut compl.wait, compl_name.as_char_ptr(), &mut key);
-        }
 
+        // IMPORTANT!
+        // I used Opaque::new() to allocate an opaque object that only created the object in stack memory.
+        // Opaque::ffi_init creates the object directly on heap memory.
         let dev = Arc::pin_init(pin_init!(Self {
-            completion: Opaque::new(compl),
+            completion <-
+                Opaque::ffi_init(|slot: *mut bindings::completion| {
+                    // see init_completion function in include/linux/completion.h
+                    unsafe {
+                        (*slot).done = 0;
+                        bindings::__init_swait_queue_head(&mut (*slot).wait, compl_name.as_char_ptr(), &mut key);
+                    }
+                })
         }))?;
 
         Ok(dev)
@@ -93,6 +92,7 @@ impl file::Operations for RustFile {
             bindings::wait_for_completion(Opaque::raw_get(&shared.completion));
         }
 
+        pr_info!("wait is done\n");
         Ok(0)
     }
 
