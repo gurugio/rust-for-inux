@@ -40,10 +40,8 @@ impl CompletionDev {
     fn try_new() -> Result<Arc<Self>> {
         pr_info!("completion_dev created\n");
 
-        let mut compl = bindings::completion::default();
         let compl_name = c_str!("completion_dev");
         let mut key: bindings::lock_class_key = bindings::lock_class_key::default();
-        compl.done = 0;
 
         // IMPORTANT!
         // I used Opaque::new() to allocate an opaque object that only created the object in stack memory.
